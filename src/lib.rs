@@ -2,25 +2,25 @@ use serde_json::Value;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::{env, fs, path::Path};
-use tokio::{fs as tokio_fs, io::AsyncWriteExt};
+use tokio::{fs as tokio_fs, task};
 use zip::ZipArchive;
-use tokio::task;
-/// ChromeDriver 설치 결과
+
+/// Information about the installed ChromeDriver
 pub struct DriverInfo {
-    /// 크롬드라이버 실행 파일 경로
+    /// Path to the ChromeDriver executable
     pub driver_path: String,
-    /// 설치된 버전
+    /// Installed version
     pub version: String,
 }
 
-/// 최신 ChromeDriver를 확인/설치 (비동기)
+/// Check and install the latest ChromeDriver asynchronously.
 ///
-/// * 이미 최신 버전이 설치되어 있으면 다운로드를 생략.
-/// * macOS(Intel/ARM), Windows 지원.
+/// * If the latest version is already installed, the download is skipped.
+/// * Supports macOS (Intel/ARM) and Windows.
 pub async fn ensure_latest_driver(
     out_dir: &str,
 ) -> Result<DriverInfo, Box<dyn std::error::Error + Send + Sync + 'static>> {
-    // 1️⃣ 최신 버전 가져오기
+    // 1️⃣ Fetch the latest version info
     let versions_url =
         "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions.json";
     let body = reqwest::get(versions_url).await?.text().await?;
@@ -30,7 +30,7 @@ pub async fn ensure_latest_driver(
         .ok_or("Failed to read version")?;
     println!("🌐 Latest ChromeDriver version: {version}");
 
-    // 2️⃣ 플랫폼 감지
+    // 2️⃣ Detect platform
     let (platform, exec_name, zip_name) = match env::consts::OS {
         "macos" => {
             let arch = env::consts::ARCH;
@@ -44,7 +44,7 @@ pub async fn ensure_latest_driver(
         other => return Err(format!("Unsupported OS: {}", other).into()),
     };
 
-    // 3️⃣ 설치 경로 확인
+    // 3️⃣ Check if already installed
     let driver_path = format!("{}/{}/{}", out_dir, zip_name, exec_name);
     if Path::new(&driver_path).exists() {
         println!("✅ Already installed: {driver_path}");
@@ -54,30 +54,28 @@ pub async fn ensure_latest_driver(
         });
     }
 
-    // 4️⃣ 다운로드 URL
+    // 4️⃣ Build download URL
     let url = format!(
         "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/{}/{}/{}.zip",
         version, platform, zip_name
     );
     println!("⬇️ Downloading from: {url}");
 
-    // 5️⃣ ZIP 다운로드
+    // 5️⃣ Download zip
     let bytes = reqwest::get(&url).await?.bytes().await?;
 
-    // 6️⃣ 압축 해제 (ZipArchive는 동기 → spawn_blocking 사용)
+    // 6️⃣ Extract archive (ZipArchive is blocking → use spawn_blocking)
     tokio_fs::create_dir_all(out_dir).await?;
     let out_dir_owned = out_dir.to_owned();
-    task::spawn_blocking(
-        move || -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
-            let reader = std::io::Cursor::new(bytes);
-            let mut archive = ZipArchive::new(reader)?;
-            archive.extract(&out_dir_owned)?;
-            Ok(())
-        },
-    )
+    task::spawn_blocking(move || -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let reader = std::io::Cursor::new(bytes);
+        let mut archive = ZipArchive::new(reader)?;
+        archive.extract(&out_dir_owned)?;
+        Ok(())
+    })
     .await??;
 
-    // 7️⃣ 실행 권한 (유닉스 전용)
+    // 7️⃣ Set execute permissions (Unix only)
     #[cfg(unix)]
     {
         let full_path = Path::new(out_dir).join(zip_name).join(exec_name);
@@ -91,7 +89,8 @@ pub async fn ensure_latest_driver(
         version: version.to_string(),
     })
 }
-/// 설치된 드라이버 버전 확인 (비동기)
+
+/// Check the installed driver version (async)
 pub async fn check_version(driver_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let status = tokio::process::Command::new(driver_path)
         .arg("--version")

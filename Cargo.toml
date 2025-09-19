@@ -1,6 +1,6 @@
 [package]
 name = "chrome-driver-rs"          # 언더스코어 대신 하이픈!
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["kyunghyunHan <ekfqlwcjswl@naver.com>"]
 description = "ChromeDriver latest version downloader & manager for Rust"

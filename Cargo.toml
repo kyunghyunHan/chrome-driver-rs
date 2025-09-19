@@ -1,0 +1,21 @@
+[package]
+name = "chrome-driver-rs"          # 언더스코어 대신 하이픈!
+version = "0.1.0"
+edition = "2021"
+authors = ["kyunghyunHan <ekfqlwcjswl@naver.com>"]
+description = "ChromeDriver latest version downloader & manager for Rust"
+license = "MIT OR Apache-2.0"   # ✅ 반드시 라이선스 명시
+repository = "https://github.com/kyunghyunHan/chrome_driver_rs"
+readme = "README.md"
+
+
+
+[lib]
+name = "chrome_driver_rs"      
+path = "src/lib.rs"           
+
+[dependencies]
+reqwest = { version = "0.12", features = ["blocking"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zip = "0.6"
